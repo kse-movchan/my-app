@@ -44,6 +44,27 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  update-deployment:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/kse-labs-deployment
+          token: ${{ secrets.DEPLOYMENT_PAT }}
+
+      - name: Update image tag
+        run: |
+          sed -i "s|image: ghcr.io/${{ github.repository }}:.*|image: ghcr.io/${{ github.repository }}:${{ github.sha }}|" \
+            applications/my-app/deployment.yaml
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add applications/my-app/deployment.yaml
+          git diff --cached --quiet || \
+            (git commit -m "deploy: my-app ${{ github.sha }}" && git push)
