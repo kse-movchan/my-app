@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 jobs:
   build-and-test:
@@ -45,6 +46,49 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  sbom-and-scan:
+    needs: docker-build-push
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SBOM with Trivy
+        run: |
+          trivy image ghcr.io/${{ github.repository }}:${{ github.sha }} \
+            --format cyclonedx \
+            --output sbom.cdx.json
+
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
+
+      - name: Upload SBOM to Dependency-Track
+        run: |
+          curl -sf -X POST "${{ vars.DTRACK_URL }}/api/v1/bom" \
+            -H "X-Api-Key: ${{ secrets.DTRACK_API_KEY }}" \
+            -H "Content-Type: multipart/form-data" \
+            -F "projectName=my-app" \
+            -F "projectVersion=${{ github.sha }}" \
+            -F "autoCreate=true" \
+            -F "bom=@sbom.cdx.json"
+
+      - name: Run Trivy container scan
+        run: |
+          trivy image ghcr.io/${{ github.repository }}:${{ github.sha }} \
+            --format sarif \
+            --output trivy-image-results.sarif \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-results.sarif
 
   update-deployment:
     needs: docker-build-push
