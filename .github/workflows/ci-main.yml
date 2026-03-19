@@ -54,10 +54,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate SBOM with Trivy
-        run: |
-          trivy image ghcr.io/${{ github.repository }}:${{ github.sha }} \
-            --format cyclonedx \
-            --output sbom.cdx.json
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          format: cyclonedx
+          output: sbom.cdx.json
 
       - name: Upload SBOM as artifact
         uses: actions/upload-artifact@v4
@@ -77,12 +78,13 @@ jobs:
             -F "bom=@sbom.cdx.json"
 
       - name: Run Trivy container scan
-        run: |
-          trivy image ghcr.io/${{ github.repository }}:${{ github.sha }} \
-            --format sarif \
-            --output trivy-image-results.sarif \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          format: sarif
+          output: trivy-image-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
