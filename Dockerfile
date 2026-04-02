@@ -1,24 +1,18 @@
-FROM node:20.11-alpine
-
+FROM node:20-alpine AS build
 WORKDIR /app
-
-# Copy only package files
 COPY package*.json ./
+RUN npm ci --production
 
-# Install production dependencies
-RUN npm ci --production && \
-    npm cache clean --force
-
-# Copy application files
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
 COPY . .
 
 EXPOSE 3000
 
-# Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+    CMD wget -qO- http://localhost:3000/health || exit 1
 
-# Run as non-root user
 USER node
 
 CMD ["node", "index.js"]
