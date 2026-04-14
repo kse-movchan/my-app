@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  security-events: write
+  contents: read
 
 jobs:
   build-and-test:
@@ -27,6 +27,9 @@ jobs:
 
   trivy-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v6
 
